@@ -293,27 +293,19 @@ function startC3Pdf2Extension() {
     const HIGHLIGHTER_VERSION = '2.0';
     ////////Main function
     function initPdf() {
-        Array.from(document.getElementsByTagName('iframe')).forEach(iframe => {
-            if (!iframe.classList.contains('pdf-activated')) {
-                try {
-                    if (new URL(iframe.src).pathname.endsWith('.pdf')) {
-                        iframe.dataset.pdf = iframe.src; //the permanent pdfUrl
-                        iframe.id = "pdf-" + iframe.closest('.roam-block').id; //window level pdfId          
-                        iframe.dataset.uid = iframe.id.slice(-9);//c3u.getUidOfContainingBlock(iframe); //for click purpose
-                        renderPdf(iframe); //render pdf through the server 
-                        initialHighlighSend(iframe);
-                    } else if (iframe.classList.contains('pdf-activated-full-screen')) {
-                        initialHighlighSend(iframe);
-                        iframe.classList.add('pdf-activated')
-                    }
-                } catch { } // some iframes have invalid src
+        const iframes = document.getElementsByTagName('iframe');
+        for (let iframe of iframes) {
+            if (iframe.src && new URL(iframe.src).pathname.toLowerCase().includes('.pdf')) {
+                if (!iframe.dataset.uid) {
+                    iframe.dataset.uid = c3u.createUid();
+                }
+                if (!iframe.dataset.initialized) {
+                    iframe.dataset.initialized = 'true';
+                    renderPdf(iframe);
+                    initialHighlighSend(iframe);
+                }
             }
-            if (iframe.src.startsWith(serverPerfix)) {
-                adjustPdfIframe(iframe);
-            }
-        })
-        activateButtons();
-        markMainHighlight();
+        }
     }
     ////////Add classlist to main highlight for making it distinct with CSS
     function markMainHighlight() {
@@ -1726,9 +1718,4 @@ function startC3Pdf2Extension() {
             });
         });
     }
-}
-
-export default {
-    onload: onload,
-    onunload: onunload
 }
