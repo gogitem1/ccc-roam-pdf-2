@@ -1007,8 +1007,11 @@ function startC3Pdf2Extension() {
             } else { //printBehavior ==='Child'
                 hlRefParentBlockUid = iframe.dataset.uid
             }
-            let ord = (pdfParams.appendHighlight) ? 'last' : 0;
-            c3u.createChildBlock(hlRefParentBlockUid, ord, taggedBlockRef, c3u.createUid());
+            // Create new highlight block
+            c3u.createChildBlock(hlRefParentBlockUid, 'last', taggedBlockRef, c3u.createUid());
+            // Sort all highlights by position
+            await c3u.sleep(100); // Wait for block creation
+            sortHighlightsByPosition(hlRefParentBlockUid);
         } else { //update color of every block ref
             getBlockUidsReferencingBlock(hlTextUid).forEach(blockUid => {
                 let refBlockTxt = c3u.blockString(blockUid);
@@ -1680,6 +1683,49 @@ function startC3Pdf2Extension() {
     /*******************************************************/
     let initInterval = window.setInterval(initPdf, 1000);
     onunloadfns.push(() => clearInterval(initInterval));
+
+    // Add this function after the decodeString function
+    function sortHighlightsByPosition(hlRefParentBlockUid) {
+        // Get all child blocks (highlights)
+        const children = c3u.allChildrenInfo(hlRefParentBlockUid)[0][0]?.children;
+        if (!children || children.length <= 1) return;
+
+        // Extract position info and create sorted array
+        const sortedChildren = children.map(child => {
+            const blockText = child.string;
+            // Extract page number from the highlight text
+            const pageMatch = blockText.match(/\{\{(\d+)\}\}/);
+            const page = pageMatch ? parseInt(pageMatch[1]) : 0;
+            
+            // Get the highlight data to extract Y position
+            const hlUid = blockText.match(/\(\((.*?)\)\)/)?.[1];
+            if (!hlUid) return { uid: child.uid, page: page, y: 0 };
+            
+            const hlDataBlock = c3u.parentBlockUid(hlUid);
+            if (!hlDataBlock) return { uid: child.uid, page: page, y: 0 };
+            
+            const hlData = decodeString(c3u.blockString(hlDataBlock));
+            const yPos = hlData?.annotation?.position?.rects?.[0]?.[1] || 0;
+            
+            return {
+                uid: child.uid,
+                page: page,
+                y: yPos
+            };
+        }).sort((a, b) => {
+            // Sort by page first, then by Y position (higher Y means lower on page)
+            if (a.page !== b.page) return a.page - b.page;
+            return a.y - b.y;
+        });
+
+        // Reorder blocks based on sorted array
+        sortedChildren.forEach((child, index) => {
+            window.roamAlphaAPI.moveBlock({
+                location: { "parent-uid": hlRefParentBlockUid, order: index },
+                block: { uid: child.uid }
+            });
+        });
+    }
 }
 
 export default {
